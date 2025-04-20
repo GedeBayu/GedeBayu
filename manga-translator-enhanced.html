@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manga Translator Pribadi</title>
+    <!-- Tesseract.js untuk OCR -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+    <!-- Fabric.js untuk manipulasi kanvas/gambar -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <!-- JSZip untuk ekstraksi file ZIP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- PDF.js untuk dukungan PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        header {
+            background-color: #ff6b6b;
+            color: white;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .upload-section {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .upload-box {
+            border: 2px dashed #ddd;
+            border-radius: 5px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .upload-box:hover {
+            border-color: #ff6b6b;
+        }
+        .btn {
+            background-color: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            margin: 5px;
+        }
+        .btn:hover {
+            background-color: #ff5252;
+        }
+        .btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .image-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .editor-card {
+            background-color: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        .canvas-container {
+            width: 100%;
+            overflow: auto;
+            position: relative;
+        }
+        .editor-controls {
+            padding: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #f8f8f8;
+        }
+        .language-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .language-btn {
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+        .language-btn.active {
+            background-color: #ff6b6b;
+            color: white;
+            border-color: #ff6b6b;
+        }
+        .progress-bar {
+            height: 10px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .progress {
+            height: 100%;
+            background-color: #ff6b6b;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .status {
+            font-size: 14px;
+            color: #666;
+        }
+        .bubbles-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+        .speech-bubble {
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 2px solid #333;
+            border-radius: 10px;
+            padding: 10px;
+            pointer-events: auto;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            max-width: 300px;
+            z-index: 10;
+        }
+        .text-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .font-selector, .size-selector {
+            padding: 5px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        #downloadAllBtn {
+            margin-top: 20px;
+            padding: 12px 24px;
+            font-size: 18px;
+            background-color: #4CAF50;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+        }
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 80%;
+            max-width: 600px;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: black;
+        }
+        .help-content h3 {
+            margin-top: 20px;
+            color: #ff6b6b;
+        }
+        .detected-text-area {
+            width: 100%;
+            min-height: 100px;
+            margin: 10px 0;
+            padding: 10px;
+            font-family: monospace;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            resize: vertical;
+        }
+        .file-formats {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+        .file-formats strong {
+            color: #ff6b6b;
+        }
+        .pdf-controls {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+            gap: 10px;
+        }
+        .page-indicator {
+            margin: 0 10px;
+        }
+        @media (max-width: 768px) {
+            .editor-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .btn {
+                width: 100%;
+                margin: 5px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Manga Translator Pribadi</h1>
+        <p>Terjemahkan manga sesuai keinginan</p>
+    </header>
+
+    <div class="container">
+        <div class="upload-section">
+            <h2>Unggah Gambar Manga</h2>
+            <div class="language-selector">
+                <button class="language-btn active" data-lang="id">Indonesia</button>
+                <button class="language-btn" data-lang="en">English</button>
+                <button class="language-btn" data-lang="ja">日本語</button>
+            </div>
+            <p>Target bahasa: <strong id="targetLang">Indonesia</strong></p>
+            <div class="upload-box" id="uploadBox">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#aaa" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <h3>Klik atau seret file ke sini</h3>
+                <p class="file-formats">Mendukung: <strong>JPG, PNG, WebP, GIF, BMP</strong> atau <strong>file ZIP</strong> berisi gambar atau <strong>PDF</strong></p>
+                <input type="file" id="fileInput" style="display:none" multiple accept="image/*,.zip,.pdf">
+                <button class="btn" onclick="document.getElementById('fileInput').click()">Pilih File</button>
+                <button class="btn" id="helpBtn" style="background-color: #3498db;">Bantuan</button>
+            </div>
+            <div class="progress-bar">
+                <div class="progress" id="totalProgress"></div>
+            </div>
+            <p class="status" id="statusText">Siap mengupload gambar manga</p>
+        </div>
+
+        <div id="editorContainer"></div>
+        
+        <button class="btn" id="downloadAllBtn" style="display: none;">Unduh Semua Gambar Terjemahan</button>
+    </div>
+
+    <!-- Modal Bantuan -->
+    <div id="helpModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Bantuan Penggunaan Manga Translator</h2>
+            <div class="help-content">
+                <h3>Cara Menggunakan</h3>
+                <ol>
+                    <li>Pilih bahasa target terjemahan (Indonesia, English, atau 日本語)</li>
+                    <li>Upload file gambar, ZIP, atau PDF dengan klik tombol "Pilih File" atau seret file ke kotak upload</li>
+                    <li>Tunggu proses OCR dan deteksi teks selesai</li>
+                    <li>Klik tombol "Terjemahkan" untuk menerjemahkan teks terdeteksi</li>
+                    <li>Edit hasil terjemahan sesuai kebutuhan</li>
+                    <li>Klik "Finalisasi" untuk menerapkan teks pada gambar</li>
+                    <li>Unduh hasil terjemahan dengan tombol "Unduh"</li>
+                </ol>
+
+                <h3>Format File yang Didukung</h3>
+                <ul>
+                    <li><strong>Gambar:</strong> JPG, PNG, WebP, GIF, BMP, dan format gambar umum lainnya</li>
+                    <li><strong>ZIP:</strong> File arsip yang berisi kumpulan gambar</li>
+                    <li><strong>PDF:</strong> File PDF akan dikonversi menjadi gambar per halaman</li>
+                </ul>
+
+                <h3>Batasan</h3>
+                <ul>
+                    <li>OCR gratis (Tesseract.js) memiliki keterbatasan dalam mendeteksi teks manga dengan akurat, terutama teks vertikal</li>
+                    <li>Layanan terjemahan gratis memiliki batasan jumlah karakter dan permintaan per hari</li>
+                    <li>Proses pendeteksian dan terjemahan mungkin membutuhkan waktu tergantung ukuran dan kompleksitas gambar</li>
+                    <li>File ZIP yang besar atau PDF dengan banyak halaman mungkin memerlukan waktu lebih lama untuk diproses</li>
+                </ul>
+
+                <h3>Tips</h3>
+                <ul>
+                    <li>Gunakan gambar dengan resolusi tinggi untuk hasil OCR yang lebih baik</li>
+                    <li>Untuk hasil terbaik, gambar manga sebaiknya memiliki teks yang jelas dan kontras tinggi</li>
+                    <li>Anda dapat mengedit area teks secara manual jika deteksi otomatis kurang akurat</li>
+                    <li>Simpan hasil pekerjaan Anda secara berkala dengan mengunduh gambar</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variabel global
+        let targetLanguage = 'id';
+        let targetLangText = 'Indonesia';
+        let languageMap = {
+            'id': 'Indonesia', 
+            'en': 'English', 
+            'ja': '日本語'
+        };
+        let editors = [];
+        let pdfDocument = null;
+        let currentPdfPage = 1;
+        let totalPdfPages = 0;
+        
+        // Inisialisasi Tesseract worker
+        const worker = Tesseract.createWorker();
+        
+        async function initTesseract() {
+            await worker.load();
+            await worker.loadLanguage('jpn');
+            await worker.initialize('jpn');
+            console.log('Tesseract worker initialized');
+        }
+        
+        // Inisialisasi PDFjs worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+        
+        // Inisialisasi saat halaman dimuat
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Inisialisasi Tesseract
+            updateStatus('Memuat mesin OCR...');
+            await initTesseract();
+            updateStatus('Siap mengupload gambar manga');
+            
+            // Event listener untuk pemilihan bahasa
+            const langBtns = document.querySelectorAll('.language-btn');
+            langBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    langBtns.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    targetLanguage = this.getAttribute('data-lang');
+                    targetLangText = languageMap[targetLanguage];
+                    document.getElementById('targetLang').textContent = targetLangText;
+                });
+            });
+            
+            // Event listener untuk tombol bantuan
+            document.getElementById('helpBtn').addEventListener('click', function() {
+                document.getElementById('helpModal').style.display = 'block';
+            });
+            
+            document.querySelector('.close').addEventListener('click', function() {
+                document.getElementById('helpModal').style.display = 'none';
+            });
+            
+            window.addEventListener('click', function(e) {
+                if (e.target == document.getElementById('helpModal')) {
+                    document.getElementById('helpModal').style.display = 'none';
+                }
+            });
+            
+            // Event listener untuk file input
+            document.getElementById('fileInput').addEventListener('change', handleFiles);
+            
+            // Drag and drop functionality
+            const uploadBox = document.getElementById('uploadBox');
+            
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                uploadBox.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                uploadBox.addEventListener(eventName, highlight, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                uploadBox.addEventListener(eventName, unhighlight, false);
+            });
+            
+            uploadBox.addEventListener('drop', handleDrop, false);
+            
+            // Event listener untuk tombol download semua
+            document.getElementById('downloadAllBtn').addEventListener('click', downloadAllImages);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        function highlight() {
+            document.getElementById('uploadBox').style.borderColor = '#ff6b6b';
+            document.getElementById('uploadBox').style.backgroundColor = '#fff0f0';
+        }
+        
+        function unhighlight() {
+            document.getElementById('uploadBox').style.borderColor = '#ddd';
+            document.getElementById('uploadBox').style.backgroundColor = 'white';
+        }
+        
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles({target: {files: files}});
+        }
+        
+        function updateStatus(text, progress = -1) {
+            document.getElementById('statusText').textContent = text;
+            if (progress >= 0) {
+                document.getElementById('totalProgress').style.width = progress + '%';
+            }
+        }
+        
+        async function handleFiles(e) {
+            const files = e.target.files;
+            if (!files.length) return;
+            
+            updateStatus('Memeriksa file...', 0);
+            
+            const editorContainer = document.getElementById('editorContainer');
+            editorContainer.innerHTML = ''; // Clear previous editors
+            editors = [];
+            
+            // Process each file
+            let imageFiles = [];
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                
+                if (file.type.startsWith('image/')) {
+                    // Direct image file
+                    imageFiles.push({
+                        file: file,
+                        name: file.name
+                    });
+                } else if (file.name.toLowerCase().endsWith('.zip')) {
+                    // ZIP file - extract images
+                    updateStatus(`Mengekstrak file ZIP: ${file.name}...`, 10);
+                    
+                    try {
+                        const zipFiles = await extractZipFile(file);
+                        imageFiles = imageFiles.concat(zipFiles);
+                        updateStatus(`Ekstraksi ZIP selesai. Ditemukan ${zipFiles.length} gambar.`, 20);
+                    } catch (error) {
+                        console.error('Error extracting ZIP file:', error);
+                        updateStatus(`Error mengekstrak ZIP: ${error.message}`, 0);
+                        return;
+                    }
+                } else if (file.name.toLowerCase().endsWith('.pdf')) {
+                    // PDF file - convert to images
+                    updateStatus(`Memproses file PDF: ${file.name}...`, 10);
+                    
+                    try {
+                        const pdfImages = await convertPdfToImages(file);
+                        imageFiles = imageFiles.concat(pdfImages);
+                        updateStatus(`Konversi PDF selesai. Ditemukan ${pdfImages.length} halaman.`, 20);
+                    } catch (error) {
+                        console.error('Error processing PDF file:', error);
+                        updateStatus(`Error memproses PDF: ${error.message}`, 0);
+                        return;
+                    }
+                } else {
+                    console.warn(`File not supported: ${file.name} (${file.type})`);
+                }
+            }
+            
+            if (imageFiles.length === 0) {
+                updateStatus('Tidak ada file gambar yang valid. Silakan coba lagi.', 0);
+                return;
+            }
+            
+            updateStatus(`Memproses ${imageFiles.length} gambar...`, 30);
+            
+            // Show download all button if multiple files
+            const downloadAllBtn = document.getElementById('downloadAllBtn');
+            if (imageFiles.length > 1) {
+                downloadAllBtn.style.display = 'block';
+            } else {
+                downloadAllBtn.style.display = 'none';
+            }
+            
+            // Process each image file
+            for (let i = 0; i < imageFiles.length; i++) {
+                const imageFile = imageFiles[i];
+                
+                updateStatus(`Memproses gambar ${i+1} dari ${imageFiles.length}: ${imageFile.name}...`, 30 + (i / imageFiles.length) * 50);
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    createEditor(e.target.result, imageFile.name, i, imageFiles.length);
+                };
+                reader.readAsDataURL(imageFile.file);
+                
+                // Add delay to prevent browser from freezing for large number of files
+                if (i % 5 === 4) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+            
+            updateStatus(`Semua gambar telah dimuat. Siap untuk mendeteksi teks.`, 100);
+        }
+        
+        async function extractZipFile(zipFile) {
+            try {
+                const zip = await JSZip.loadAsync(zipFile);
+                const imageFiles = [];
+                const supportedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'];
+                
+                // Get all entries in the ZIP file
+                const entries = Object.keys(zip.files);
+                let processedFiles = 0;
+                
+                for (const entry of entries) {
+                    // Check if it's a file and not a directory
+                    if (!zip.files[entry].dir) {
+                        // Check if it's an image file
+                        const lowerEntry = entry.toLowerCase();
+                        if (supportedExtensions.some(ext => lowerEntry.endsWith(ext))) {
+                            const fileName = entry.split('/').pop(); // Get filename without path
+                            
+                            // Get file content as blob
+                            const blob = await zip.files[entry].async('blob');
+                            const imageFile = new File([blob], fileName, { type: getTypeFromExtension(fileName) });
+                            
+                            imageFiles.push({
+                                file: imageFile,
+                                name: fileName
+                            });
+                        }
+                    }
+                    
+                    processedFiles++;
+                    updateStatus(`Mengekstrak ZIP: ${processedFiles} dari ${entries.length} file...`, 10 + (processedFiles / entries.length) * 10);
+                }
+                
+                return imageFiles;
+            } catch (error) {
+                console.error('Error extracting ZIP:', error);
+                throw new Error('Gagal mengekstrak file ZIP');
+            }
+        }
+        
+        function getTypeFromExtension(filename) {
+            const ext = filename.split('.').pop().toLowerCase();
+            const mimeTypes = {
+                'jpg': 'image/jpeg',
+                'jpeg': 'image/jpeg',
+                'png': 'image/png',
+                'webp': 'image/webp',
+                'gif': 'image/gif',
+                'bmp': 'image/bmp'
+            };
+            return mimeTypes[ext] || 'image/jpeg';
+        }
+        
+        async function convertPdfToImages(pdfFile) {
+            try {
+                // Load the PDF file
+                const arrayBuffer = await pdfFile.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                
+                totalPdfPages = pdf.numPages;
+                pdfDocument = pdf;
+                
+                const imageFiles = [];
+                
+                // Convert each page to an image
+                for (let pageNum = 1; pageNum <= totalPdfPages; pageNum++) {
+                    // Get page
+                    const page = await pdf.getPage(pageNum);
+                    
+                    // Set scale to get reasonable resolution
+                    const viewport = page.getViewport({ scale: 2.0 });
+                    
+                    // Create canvas and context for rendering
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    
+                    // Render PDF page to canvas
+                    await page.render({
+                        canvasContext: context,
+                        viewport: viewport
+                    }).promise;
+                    
+                    // Convert canvas to blob
+                    const blob = await new Promise(resolve => {
+                        canvas.toBlob(resolve, 'image/png', 1.0);
+                    });
+                    
+                    // Create file from blob
+                    const fileName = `${pdfFile.name.replace('.pdf', '')}_page${pageNum}.png`;
+                    const imageFile = new File([blob], fileName, { type: 'image/png' });
+                    
+                    imageFiles.push({
+                        file: imageFile,
+                        name: fileName
+                    });
+                    
+                    updateStatus(`Memproses PDF: halaman ${pageNum} dari ${totalPdfPages}...`, 10 + (pageNum / totalPdfPages) * 10);
+                }
+                
+                return imageFiles;
+            } catch (error) {
+                console.error('Error converting PDF to images:', error);
+                throw new Error('Gagal mengkonversi PDF ke gambar');
+            }
+        }
+        
+        function createEditor(imageUrl, fileName, index, totalFiles) {
+            const editorContainer = document.getElementById('editorContainer');
+            
+            // Create editor card
+            const editorCard = document.createElement('div');
+            editorCard.className = 'editor-card';
+            editorCard.innerHTML = `
+                <div class="editor-controls">
+                    <div>
+                        <h3>${fileName}</h3>
+                        <div class="progress-bar">
+                            <div class="progress" id="progress-${index}"></div>
+                        </div>
+                        <p class="status" id="status-${index}">Memuat gambar...</p>
+                    </div>
+                    <div>
+                        <button class="btn" id="detectBtn-${index}">Deteksi Teks</button>
+                        <button class="btn" id="translateBtn-${index}" disabled>Terjemahkan</button>
+                        <button class="btn" id="finalizeBtn-${index}" disabled>Finalisasi</button>
+                        <button class="btn" id="downloadBtn-${index}" disabled>Unduh</button>
+                    </div>
+                </div>
+                <div class="canvas-container" id="canvas-container-${index}">
+                    <canvas id="canvas-${index}"></canvas>
+                    <div class="bubbles-container" id="bubbles-container-${index}"></div>
+                </div>
+                <div class="editor-controls" id="text-edit-area-${index}" style="display:none;">
+                    <h4>Edit Teks Terdeteksi</h4>
+                    <textarea class="detected-text-area" id="detected-text-${index}" placeholder="Teks terdeteksi akan muncul di sini"></textarea>
+                    <div class="text-controls">
+                        <select class="font-selector" id="font-selector-${index}">
+                            <option value="Arial">Arial</option>
+                            <option value="Comic Sans MS">Comic Sans MS</option>
+                            <option value="Impact">Impact</option>
+                            <option value="Verdana">Verdana</option>
+                            <option value="Times New Roman">Times New Roman</option>
+                        </select>
+                        <select class="size-selector" id="size-selector-${index}">
+                            <option value="12">12px</option>
+                            <option value="14">14px</option>
+                            <option value="16" selected>16px</option>
+                            <option value="18">18px</option>
+                            <option value="20">20px</option>
+                            <option value="24">24px</option>
+                            <option value="28">28px</option>
+                        </select>
+                        <button class="btn" id="apply-text-btn-${index}">Terapkan Teks</button>
+                    </div>
+                </div>
+            `;
+            
+            editorContainer.appendChild(editorCard);
+            
+            // Initialize fabric canvas
+            const canvas = new fabric.Canvas(`canvas-${index}`);
+            const img = new Image();
+            img.src = imageUrl;
+            
+            img.onload = function() {
+                // Set canvas dimensions to match image
+                canvas.setWidth(img.width);
+                canvas.setHeight(img.height);
+                
+                // Add image to canvas
+                fabric.Image.fromURL(imageUrl, function(oImg) {
+                    canvas.setBackgroundImage(oImg, canvas.renderAll.bind(canvas));
+                    
+                    updateEditorStatus(index, 'Gambar siap. Klik "Deteksi Teks" untuk mulai.', 100);
+                    document.getElementById(`detectBtn-${index}`).disabled = false;
+                    
+                    // Update overall progress
+                    updateOverallProgress((index + 1) / totalFiles * 100);
+                });
+            };
+            
+            // Editor state
+            const editor = {
+                canvas: canvas,
+                fileName: fileName,
+                imageUrl: imageUrl,
+                textRegions: [],
+                translatedTextRegions: [],
+                originalText: '',
+                translatedText: ''
+            };
+            
+            editors.push(editor);
+            
+            // Set up button event handlers
+            document.getElementById(`detectBtn-${index}`).addEventListener('click', () => detectText(index));
+            document.getElementById(`translateBtn-${index}`).addEventListener('click', () => translateText(index));
+            document.getElementById(`finalizeBtn-${index}`).addEventListener('click', () => finalizeTranslation(index));
+            document.getElementById(`downloadBtn-${index}`).addEventListener('click', () => downloadImage(index));
+            document.getElementById(`apply-text-btn-${index}`).addEventListener('click', () => applyEditedText(index));
+        }
+        
+        function updateEditorStatus(index, text, progress = -1) {
+            const statusElement = document.getElementById(`status-${index}`);
+            if (statusElement) {
+                statusElement.textContent = text;
+            }
+            
+            if (progress >= 0) {
+                const progressElement = document.getElementById(`progress-${index}`);
+                if (progressElement) {
+                    progressElement.style.width = progress + '%';
+                }
+            }
+        }
+        
+        function updateOverallProgress(progress) {
+            document.getElementById('totalProgress').style.width = progress + '%';
+        }
+        
+        async function detectText(index) {
+            const editor = editors[index];
+            const detectBtn = document.getElementById(`detectBtn-${index}`);
+            
+            detectBtn.disabled = true
